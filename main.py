@@ -1,6 +1,7 @@
 import pygame
 import sys
 import random
+import welcome
 
 # Initialize Flappy Meat
 pygame.init()
@@ -8,7 +9,6 @@ pygame.init()
 # Screen
 FPS = 60
 WHITE = [255, 255, 255]
-BLACK = [0, 0, 0]
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 500
 
@@ -21,7 +21,6 @@ clock = pygame.time.Clock()
 gravity = 0.5
 jump_height = 7
 fire_width = 150
-time_up = 60
 fire_gap = 200
 player_score = 0
 
@@ -29,38 +28,20 @@ player_score = 0
 font = pygame.font.Font('freesansbold.ttf', 32)
 score = font.render("SCORE", True, WHITE)
 
-# Events
-time_played = pygame.USEREVENT + 1
-
-# Timers
-pygame.time.set_timer(time_played, 60000)
-
 # Images
-background_img = pygame.image.load("game_images/field.jpeg").convert()
-#meat_img = pygame.image.load("venv/my_meat1.png").convert_alpha()
-fire_img = pygame.image.load("game_images/fire1.png").convert_alpha()
-fire_img_rect = fire_img.get_rect()
 top_fire_img = pygame.image.load("game_images/fire2.png").convert_alpha()
 
 # Masks
-#meat_mask = pygame.mask.from_surface(meat_img)
-fire_mask = pygame.mask.from_surface(fire_img)
-fire_mask_image = fire_mask.to_surface()
 top_fire_mask = pygame.mask.from_surface(top_fire_img)
-
-# Resize images
-#meat_img = pygame.transform.scale(meat_img, (120, 120))
-background_img = pygame.transform.scale(background_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
 
 class Meat:
     def __init__(self):
         self.image = pygame.image.load("game_images/my_meat1.png").convert_alpha()
-        self.image_scale = pygame.transform.scale(self.image, (120, 120))
-        self.rect = self.image.get_rect()
-        self.mask = pygame.mask.from_surface(self.image)
+        self.resized = pygame.transform.scale(self.image, (120, 120)).convert_alpha()
+        self.mask = pygame.mask.from_surface(self.resized)
         self.x = 200
-        self.y = 250
+        self.y = 100
         self.velocity = 0.5
 
     def jump(self):
@@ -77,12 +58,23 @@ class Fire:
         self.height = random.randint(80, 300)
         self.y = SCREEN_HEIGHT - self.height + 30
         self.y2 = -35
-
-    #def get_rect(self):
-        #return pygame.Rect(self.x + fire_width, self.y + self.height, fire_width, self.height)
+        self.image = pygame.image.load("game_images/fire1.png").convert_alpha()
+        self.resized = pygame.transform.scale(self.image, (fire_width, self.height))
+        self.mask = pygame.mask.from_surface(self.resized)
+        self.topImage = pygame.image.load("game_images/fire2.png").convert_alpha()
+        self.topResized = pygame.transform.scale(self.topImage, (fire_width, SCREEN_HEIGHT - self.height - 45))
+        self.topMask = pygame.mask.from_surface(self.topResized)
 
     def update(self):
         self.x -= 5
+
+
+class Background:
+    def __init__(self):
+        self.image = pygame.image.load("game_images/field.jpeg").convert()
+        self.resized = pygame.transform.scale(self.image, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.x = 0
+        self.y = 0
 
 
 def add_score(meat, fires):
@@ -92,30 +84,35 @@ def add_score(meat, fires):
         fire_pos = fire.x + fire_width / 2
         if meat_pos == fire_pos:
             player_score += 1
+            return True
+        if meat.y >= SCREEN_HEIGHT:
+            return False
 
 
-#def check_collision(meat, fires):
+def check_collision(meat, fires):
+    for fire in fires:
+        if meat.mask.overlap(fire.mask, (fire.x - meat.x, fire.y - meat.y)):
+            return True
+        if meat.mask.overlap(fire.topMask, (fire.x - meat.x, fire.y2 - meat.y)):
+            return True
 
 
-def draw_images(meat, fires):
-    display.blit(background_img, (0, 0))
-    meat_img_resized = pygame.transform.scale(meat.image, (120, 120))
-    display.blit(meat_img_resized, (meat.x, meat.y))
+def draw_images(meat, fires, background):
+    display.blit(background.resized, (background.x, background.y))
+    display.blit(meat.resized, (meat.x, meat.y))
     display.blit(score, (450, 50))
     points = font.render(f'{player_score}', True, WHITE)
-    display.blit(points, (500, 100))
+    display.blit(points, (493, 100))
 
     for fire in fires:
-        fire_img_resized = pygame.transform.scale(fire_img, (fire_width, fire.height))
-        display.blit(fire_img_resized, (fire.x, fire.y))
-        #display.blit(fire_mask_image, (fire.x, fire.y))
-        top_fire_img_resized = pygame.transform.scale(top_fire_img, (fire_width, SCREEN_HEIGHT - fire.height - 90))
-        display.blit(top_fire_img_resized, (fire.x, fire.y2))
+        display.blit(fire.resized, (fire.x, fire.y))
+        display.blit(fire.topResized, (fire.x, fire.y2))
 
 
-def main():
-    global time_up, player_score
+def thegame():
+    global player_score, gravity
     meat = Meat()
+    background = Background()
     fires = []
 
     interval_counter = 0
@@ -125,10 +122,6 @@ def main():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type == time_played:
-                print(time_elapsed)
-                time_up += 60
-            time_elapsed = f"You have been playing for {time_up} seconds."
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     meat.jump()
@@ -148,33 +141,40 @@ def main():
             fire.update()
             if fire.height < 200:
                 fire.y = SCREEN_HEIGHT - fire.height + 20
+            if check_collision(meat, fires):
+                meat.velocity += 10
+
 
         # Add other functions:
+        draw_images(meat, fires, background)
         add_score(meat, fires)
-        draw_images(meat, fires)
-        #if check_collision(meat, fires):
-            #meat.velocity += 50
-
 
         pygame.display.flip()
         clock.tick(FPS)
 
 
 if __name__ == "__main__":
-    main()
+    welcome.welcome_screen()
+    thegame()
+
+
 
 """
-Add collision boxes
-
 Create welcome screen (separate function)
     - "input name here" (press enter)
-    - press space bar to start
-
+    
+    welcome screen features:
+    - Custom logo
+    - 'press space bar to start' message
+    - flappy meat replaces the 'a' in "Flappy Meat" and bounces up and down
+    - A page where you can view your scores
+    
 Friends leader board
 
 Add scoring system
 
-3 life system? each time you hit the fire the meat gets more "cooked" wings start gettinb burnt?
+3 life system? each time you hit the fire the meat gets more "cooked" wings start getting burnt?
 
-Can add meteors (meatballs on fire) occasionally raining diagonlly through screen. Players can have 1 "blink" available every 3-5s?
+Can add meteors (meatballs on fire) occasionally raining diagonally through screen. Players can have 1
+"blink" available every 3-5s?
 """
